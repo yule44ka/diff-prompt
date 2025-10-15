@@ -1,4 +1,4 @@
-.idea
+.idea/
 .env
 
 # Build results
@@ -49,5 +49,4 @@ appsettings.*.json
 **/packages/*
 
 # JetBrains Rider
-.idea/
 *.sln.iml
