@@ -1,0 +1,270 @@
+@page "/"
+@using CodeDiffPrompt.Web.Components
+@using CodeDiffPrompt.Web.Models
+@using CodeDiffPrompt.Web.Services
+@inject IDiffService DiffService
+@inject PromptBuilder PromptBuilder
+@inject ClaudeClient ClaudeClient
+@inject HistoryService HistoryService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Code Diff Analyzer</PageTitle>
+
+<div class="main-container">
+    <header class="app-header">
+        <h1>Code Diff Analyzer</h1>
+        <nav>
+            <a href="/history" class="btn btn-outline-primary">View History</a>
+        </nav>
+    </header>
+
+    <div class="editor-section">
+        <div class="editor-controls">
+            <div class="form-group">
+                <label for="fileName">File Name (optional):</label>
+                <input type="text" id="fileName" class="form-control" @bind="FileName" placeholder="e.g., Program.cs" />
+            </div>
+            
+            <div class="form-group">
+                <label for="language">Language:</label>
+                <select id="language" class="form-select" @bind="Language" @bind:after="OnLanguageChanged">
+                    <option value="csharp">C#</option>
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="go">Go</option>
+                    <option value="rust">Rust</option>
+                    <option value="html">HTML</option>
+                    <option value="css">CSS</option>
+                    <option value="sql">SQL</option>
+                    <option value="json">JSON</option>
+                    <option value="xml">XML</option>
+                </select>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" @onclick="CaptureOriginal" disabled="@IsProcessing">
+                    Capture Original
+                </button>
+                <button class="btn btn-success" @onclick="GeneratePrompt" disabled="@(!HasOriginal || IsProcessing)">
+                    Generate Prompt
+                </button>
+                <button class="btn btn-info" @onclick="AnalyzeChanges" disabled="@(!HasPrompt || IsProcessing)">
+                    Analyze Changes
+                </button>
+                <button class="btn btn-secondary" @onclick="ResetAll" disabled="@IsProcessing">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <div class="editor-pane">
+            <h3>Code Editor</h3>
+            @if (HasOriginal)
+            {
+                <div class="alert alert-info">
+                    Original version captured. Edit the code and click "Generate Prompt" to see changes.
+                </div>
+            }
+            <CodeEditor @ref="codeEditor" EditorId="main-editor" Language="@Language" Value="@CurrentCode" />
+        </div>
+    </div>
+
+    <div class="output-section">
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(ActiveTab == "prompt" ? "active" : "")" 
+                        @onclick="@(() => ActiveTab = "prompt")">
+                    Prompt
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(ActiveTab == "diff" ? "active" : "")" 
+                        @onclick="@(() => ActiveTab = "diff")">
+                    Diff
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(ActiveTab == "response" ? "active" : "")" 
+                        @onclick="@(() => ActiveTab = "response")">
+                    LLM Response
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            @if (ActiveTab == "prompt")
+            {
+                <div class="tab-pane">
+                    <PromptPreview Prompt="@GeneratedPrompt" Editable="true" OnPromptChanged="OnPromptEdited" />
+                </div>
+            }
+            else if (ActiveTab == "diff")
+            {
+                <div class="tab-pane">
+                    <pre class="diff-display">@GeneratedDiff</pre>
+                </div>
+            }
+            else if (ActiveTab == "response")
+            {
+                <div class="tab-pane">
+                    <LlmResponseView Response="@LlmResponse" IsLoading="@IsProcessing" ErrorMessage="@ErrorMessage" />
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private CodeEditor? codeEditor;
+    private string OriginalCode = "";
+    private string CurrentCode = "";
+    private string Language = "csharp";
+    private string? FileName;
+    private string GeneratedPrompt = "";
+    private string GeneratedDiff = "";
+    private string LlmResponse = "";
+    private string ErrorMessage = "";
+    private bool IsProcessing = false;
+    private bool HasOriginal = false;
+    private bool HasPrompt = false;
+    private string ActiveTab = "prompt";
+    private string? CustomPrompt = null;
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Initialize with sample code
+            CurrentCode = @"public class Calculator
+{
+    public int Add(int a, int b)
+    {
+        return a + b;
+    }
+}";
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task CaptureOriginal()
+    {
+        if (codeEditor != null)
+        {
+            OriginalCode = await codeEditor.GetValue();
+            HasOriginal = true;
+            ErrorMessage = "";
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnLanguageChanged()
+    {
+        if (codeEditor != null)
+        {
+            await codeEditor.SetLanguage(Language);
+        }
+    }
+
+    private async Task GeneratePrompt()
+    {
+        if (!HasOriginal) return;
+
+        try
+        {
+            IsProcessing = true;
+            ErrorMessage = "";
+            StateHasChanged();
+
+            CurrentCode = await codeEditor!.GetValue();
+
+            // Generate diff locally
+            GeneratedDiff = DiffService.BuildUnifiedDiff(OriginalCode, CurrentCode, FileName);
+            GeneratedPrompt = PromptBuilder.Build(Language, FileName, GeneratedDiff);
+
+            HasPrompt = true;
+            ActiveTab = "prompt";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to generate prompt: {ex.Message}";
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AnalyzeChanges()
+    {
+        if (!HasPrompt) return;
+
+        try
+        {
+            IsProcessing = true;
+            ErrorMessage = "";
+            LlmResponse = "";
+            ActiveTab = "response";
+            StateHasChanged();
+
+            // Use custom prompt if provided, otherwise use generated prompt
+            var promptToUse = !string.IsNullOrWhiteSpace(CustomPrompt) ? CustomPrompt : GeneratedPrompt;
+
+            // Call Claude
+            LlmResponse = await ClaudeClient.AnalyzeAsync(promptToUse);
+
+            // Save to history
+            await HistoryService.SaveRecordAsync(
+                OriginalCode,
+                CurrentCode,
+                Language,
+                FileName,
+                promptToUse,
+                GeneratedDiff,
+                LlmResponse
+            );
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to analyze: {ex.Message}";
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResetAll()
+    {
+        OriginalCode = "";
+        CurrentCode = "";
+        GeneratedPrompt = "";
+        GeneratedDiff = "";
+        LlmResponse = "";
+        ErrorMessage = "";
+        HasOriginal = false;
+        HasPrompt = false;
+        CustomPrompt = null;
+        ActiveTab = "prompt";
+        
+        if (codeEditor != null)
+        {
+            await codeEditor.SetValue("");
+        }
+        
+        StateHasChanged();
+    }
+
+    private void OnPromptEdited(string newPrompt)
+    {
+        CustomPrompt = string.IsNullOrWhiteSpace(newPrompt) ? null : newPrompt;
+        GeneratedPrompt = newPrompt;
+    }
+}
+

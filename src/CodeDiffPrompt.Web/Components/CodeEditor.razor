@@ -1,0 +1,72 @@
+@using BlazorMonaco
+@using BlazorMonaco.Editor
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<div class="code-editor-container">
+    <StandaloneCodeEditor 
+        @ref="_editor" 
+        Id="@EditorId"
+        ConstructionOptions="EditorConstructionOptions"
+        CssClass="editor-instance" />
+</div>
+
+@code {
+    private StandaloneCodeEditor? _editor;
+
+    [Parameter]
+    public string EditorId { get; set; } = "code-editor";
+
+    [Parameter]
+    public string Language { get; set; } = "csharp";
+
+    [Parameter]
+    public string Value { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> OnValueChanged { get; set; }
+
+    private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
+    {
+        return new StandaloneEditorConstructionOptions
+        {
+            AutomaticLayout = true,
+            Language = Language,
+            Value = Value,
+            Theme = "vs-dark",
+            FontSize = 14,
+            ScrollBeyondLastLine = false,
+            WordWrap = "on",
+            Minimap = new EditorMinimapOptions { Enabled = true }
+        };
+    }
+
+    public async Task<string> GetValue()
+    {
+        if (_editor != null)
+        {
+            return await _editor.GetValue() ?? "";
+        }
+        return "";
+    }
+
+    public async Task SetValue(string value)
+    {
+        if (_editor != null)
+        {
+            await _editor.SetValue(value);
+        }
+    }
+
+    public async Task SetLanguage(string language)
+    {
+        if (_editor != null)
+        {
+            var model = await _editor.GetModel();
+            if (model != null)
+            {
+                await Global.SetModelLanguage(JSRuntime, model, language);
+            }
+        }
+    }
+}

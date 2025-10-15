@@ -1,0 +1,143 @@
+@page "/history"
+@using CodeDiffPrompt.Web.Models
+@using CodeDiffPrompt.Web.Services
+@inject HistoryService HistoryService
+@inject NavigationManager Navigation
+
+<PageTitle>History - Code Diff Analyzer</PageTitle>
+
+<div class="history-container">
+    <header class="page-header">
+        <h1>Analysis History</h1>
+        <a href="/" class="btn btn-primary">Back to Editor</a>
+    </header>
+
+    @if (IsLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading history...</p>
+        </div>
+    }
+    else if (HistoryItems.Count == 0)
+    {
+        <div class="empty-state">
+            <p class="text-muted">No analysis history yet. Start by analyzing some code!</p>
+        </div>
+    }
+    else
+    {
+        <div class="history-list">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Language</th>
+                        <th>File Name</th>
+                        <th>Diff Preview</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in HistoryItems)
+                    {
+                        <tr>
+                            <td>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td><span class="badge bg-secondary">@item.Language</span></td>
+                            <td>@(item.FileName ?? "N/A")</td>
+                            <td class="diff-preview">
+                                <code>@item.DiffPreview</code>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" @onclick="() => ViewDetails(item.Id)">
+                                    View Details
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (SelectedRecord != null)
+    {
+        <div class="modal-backdrop show"></div>
+        <div class="modal show d-block" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Analysis Details</h5>
+                        <button type="button" class="btn-close" @onclick="CloseDetails"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="detail-section">
+                            <h6>Information</h6>
+                            <p><strong>Date:</strong> @SelectedRecord.CreatedAt.ToLocalTime().ToString("F")</p>
+                            <p><strong>Language:</strong> @SelectedRecord.Language</p>
+                            <p><strong>File:</strong> @(SelectedRecord.FileName ?? "N/A")</p>
+                        </div>
+
+                        <div class="detail-section">
+                            <h6>Diff</h6>
+                            <pre class="diff-display">@SelectedRecord.DiffText</pre>
+                        </div>
+
+                        <div class="detail-section">
+                            <h6>Prompt</h6>
+                            <pre class="prompt-display">@SelectedRecord.PromptText</pre>
+                        </div>
+
+                        <div class="detail-section">
+                            <h6>LLM Response</h6>
+                            <div class="response-display">@SelectedRecord.LlmResponse</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseDetails">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<HistoryItemDto> HistoryItems = new();
+    private bool IsLoading = true;
+    private Data.PromptRecord? SelectedRecord = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        IsLoading = true;
+        try
+        {
+            HistoryItems = await HistoryService.GetRecentHistoryAsync(50);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task ViewDetails(Guid id)
+    {
+        SelectedRecord = await HistoryService.GetRecordByIdAsync(id);
+        StateHasChanged();
+    }
+
+    private void CloseDetails()
+    {
+        SelectedRecord = null;
+        StateHasChanged();
+    }
+}
+
+
