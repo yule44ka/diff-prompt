@@ -69,4 +69,21 @@
             }
         }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _editor != null && !string.IsNullOrEmpty(Value))
+        {
+            // Give Monaco Editor time to initialize
+            await Task.Delay(100);
+            try
+            {
+                await _editor.SetValue(Value);
+            }
+            catch
+            {
+                // Editor might not be ready yet, that's okay
+            }
+        }
+    }
 }

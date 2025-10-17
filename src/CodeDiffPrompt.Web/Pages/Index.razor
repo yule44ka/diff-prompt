@@ -20,6 +20,14 @@
     </header>
 
     <div class="editor-section">
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Error:</strong> @ErrorMessage
+                <button type="button" class="btn-close" @onclick="@(() => ErrorMessage = "")"></button>
+            </div>
+        }
+        
         <div class="editor-controls">
             <div class="form-group">
                 <label for="fileName">File Name (optional):</label>
@@ -98,19 +106,37 @@
         <div class="tab-content">
             @if (ActiveTab == "prompt")
             {
-                <div class="tab-pane">
-                    <PromptPreview Prompt="@GeneratedPrompt" Editable="true" OnPromptChanged="OnPromptEdited" />
+                <div class="tab-pane active">
+                    @if (string.IsNullOrEmpty(GeneratedPrompt))
+                    {
+                        <div class="alert alert-info">
+                            No prompt generated yet. Click "Generate Prompt" to create one.
+                        </div>
+                    }
+                    else
+                    {
+                        <pre class="diff-display">@GeneratedPrompt</pre>
+                    }
                 </div>
             }
             else if (ActiveTab == "diff")
             {
-                <div class="tab-pane">
-                    <pre class="diff-display">@GeneratedDiff</pre>
+                <div class="tab-pane active">
+                    @if (string.IsNullOrEmpty(GeneratedDiff))
+                    {
+                        <div class="alert alert-info">
+                            No diff available yet.
+                        </div>
+                    }
+                    else
+                    {
+                        <pre class="diff-display">@GeneratedDiff</pre>
+                    }
                 </div>
             }
             else if (ActiveTab == "response")
             {
-                <div class="tab-pane">
+                <div class="tab-pane active">
                     <LlmResponseView Response="@LlmResponse" IsLoading="@IsProcessing" ErrorMessage="@ErrorMessage" />
                 </div>
             }
@@ -132,32 +158,48 @@
     private bool HasOriginal = false;
     private bool HasPrompt = false;
     private string ActiveTab = "prompt";
-    private string? CustomPrompt = null;
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
+    protected override void OnInitialized()
     {
-        if (firstRender)
-        {
-            // Initialize with sample code
-            CurrentCode = @"public class Calculator
+        // Initialize with sample code
+        CurrentCode = @"public class Calculator
 {
     public int Add(int a, int b)
     {
         return a + b;
     }
 }";
-            StateHasChanged();
-        }
-        return Task.CompletedTask;
     }
 
     private async Task CaptureOriginal()
     {
-        if (codeEditor != null)
+        try
         {
+            if (codeEditor == null)
+            {
+                ErrorMessage = "Editor is not initialized";
+                StateHasChanged();
+                return;
+            }
+
             OriginalCode = await codeEditor.GetValue();
+            
+            if (string.IsNullOrWhiteSpace(OriginalCode))
+            {
+                ErrorMessage = "Cannot capture empty code";
+                StateHasChanged();
+                return;
+            }
+
             HasOriginal = true;
             ErrorMessage = "";
+            await JS.InvokeVoidAsync("console.log", "Original code captured, length:", OriginalCode.Length);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to capture original: {ex.Message}";
+            await JS.InvokeVoidAsync("console.error", "CaptureOriginal error:", ex.ToString());
             StateHasChanged();
         }
     }
@@ -180,18 +222,57 @@
             ErrorMessage = "";
             StateHasChanged();
 
-            CurrentCode = await codeEditor!.GetValue();
+            if (codeEditor == null)
+            {
+                ErrorMessage = "Editor is not initialized";
+                return;
+            }
+
+            CurrentCode = await codeEditor.GetValue();
+            
+            await JS.InvokeVoidAsync("console.log", "Current code length:", CurrentCode?.Length ?? 0);
+            await JS.InvokeVoidAsync("console.log", "Original code length:", OriginalCode?.Length ?? 0);
+
+            if (string.IsNullOrWhiteSpace(CurrentCode))
+            {
+                ErrorMessage = "Current code is empty";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(OriginalCode))
+            {
+                ErrorMessage = "Original code was not captured properly";
+                return;
+            }
 
             // Generate diff locally
             GeneratedDiff = DiffService.BuildUnifiedDiff(OriginalCode, CurrentCode, FileName);
+            
+            await JS.InvokeVoidAsync("console.log", "Generated diff length:", GeneratedDiff?.Length ?? 0);
+            await JS.InvokeVoidAsync("console.log", "Generated diff:", GeneratedDiff);
+            
+            if (string.IsNullOrWhiteSpace(GeneratedDiff))
+            {
+                ErrorMessage = "Failed to generate diff";
+                return;
+            }
+
             GeneratedPrompt = PromptBuilder.Build(Language, FileName, GeneratedDiff);
+
+            await JS.InvokeVoidAsync("console.log", "Generated prompt length:", GeneratedPrompt?.Length ?? 0);
+            await JS.InvokeVoidAsync("console.log", "Generated prompt:", GeneratedPrompt);
 
             HasPrompt = true;
             ActiveTab = "prompt";
+            
+            await JS.InvokeVoidAsync("console.log", "HasPrompt set to:", HasPrompt);
+            await JS.InvokeVoidAsync("console.log", "ActiveTab set to:", ActiveTab);
+            await JS.InvokeVoidAsync("console.log", "Prompt generated successfully");
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Failed to generate prompt: {ex.Message}";
+            await JS.InvokeVoidAsync("console.error", "GeneratePrompt error:", ex.ToString());
         }
         finally
         {
@@ -212,11 +293,8 @@
             ActiveTab = "response";
             StateHasChanged();
 
-            // Use custom prompt if provided, otherwise use generated prompt
-            var promptToUse = !string.IsNullOrWhiteSpace(CustomPrompt) ? CustomPrompt : GeneratedPrompt;
-
             // Call Claude
-            LlmResponse = await ClaudeClient.AnalyzeAsync(promptToUse);
+            LlmResponse = await ClaudeClient.AnalyzeAsync(GeneratedPrompt);
 
             // Save to history
             await HistoryService.SaveRecordAsync(
@@ -224,7 +302,7 @@
                 CurrentCode,
                 Language,
                 FileName,
-                promptToUse,
+                GeneratedPrompt,
                 GeneratedDiff,
                 LlmResponse
             );
@@ -250,7 +328,6 @@
         ErrorMessage = "";
         HasOriginal = false;
         HasPrompt = false;
-        CustomPrompt = null;
         ActiveTab = "prompt";
         
         if (codeEditor != null)
@@ -259,12 +336,6 @@
         }
         
         StateHasChanged();
-    }
-
-    private void OnPromptEdited(string newPrompt)
-    {
-        CustomPrompt = string.IsNullOrWhiteSpace(newPrompt) ? null : newPrompt;
-        GeneratedPrompt = newPrompt;
     }
 }
 
