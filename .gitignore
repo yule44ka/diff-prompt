@@ -41,7 +41,7 @@ ScaffoldingReadMe.txt
 
 # Secrets
 appsettings.*.json
-!appsettings.Development.json
+appsettings.Development.json
 
 # NuGet
 *.nupkg

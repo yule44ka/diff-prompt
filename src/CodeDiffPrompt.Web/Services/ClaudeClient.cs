@@ -41,7 +41,8 @@ public class ClaudeClient
             httpRequest.Headers.Add("anthropic-version", _options.Version);
             httpRequest.Content = JsonContent.Create(requestBody);
 
-            _logger.LogInformation("Sending request to Claude API with model {Model}", _options.Model);
+            _logger.LogInformation("Sending request to Claude API: URL={Url}, Model={Model}, Version={Version}", 
+                $"{_options.ApiBase}/v1/messages", _options.Model, _options.Version);
 
             var response = await _http.SendAsync(httpRequest, ct);
             response.EnsureSuccessStatusCode();

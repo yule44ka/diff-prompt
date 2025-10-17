@@ -8,7 +8,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection("Anthropic"));
 builder.Services.AddDbContext<AppDbContext>(o =>
     o.UseSqlite(builder.Configuration.GetConnectionString("Default")));
-builder.Services.AddHttpClient<ClaudeClient>();
+builder.Services.AddHttpClient<ClaudeClient>()
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1)
+    });
 builder.Services.AddScoped<IDiffService, DiffService>();
 builder.Services.AddScoped<PromptBuilder>();
 builder.Services.AddScoped<HistoryService>();
