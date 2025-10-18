@@ -3,6 +3,9 @@ using CodeDiffPrompt.Web.Models;
 using CodeDiffPrompt.Web.Services;
 using Microsoft.EntityFrameworkCore;
 
+// Загружаем переменные из .env файла
+EnvLoader.Load();
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection("Anthropic"));
