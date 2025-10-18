@@ -94,16 +94,7 @@
             @if (ActiveTab == "prompt")
             {
                 <div class="tab-pane active">
-                    @if (string.IsNullOrEmpty(GeneratedPrompt))
-                    {
-                        <div class="alert alert-info">
-                            No prompt generated yet. Click "Generate Prompt" to create one.
-                        </div>
-                    }
-                    else
-                    {
-                        <pre class="diff-display">@GeneratedPrompt</pre>
-                    }
+                    <PromptView Prompt="@GeneratedPrompt" IsLoading="@IsGeneratingPrompt" />
                 </div>
             }
             else if (ActiveTab == "diff")
@@ -141,6 +132,7 @@
     private string GeneratedDiff = "";
     private string LlmResponse = "";
     private bool IsProcessing = false;
+    private bool IsGeneratingPrompt = false;
     private bool HasOriginal = false;
     private bool HasPrompt = false;
     private string ActiveTab = "prompt";
@@ -201,6 +193,7 @@
         try
         {
             IsProcessing = true;
+            IsGeneratingPrompt = true;
             StateHasChanged();
 
             if (codeEditor == null)
@@ -258,6 +251,7 @@
         finally
         {
             IsProcessing = false;
+            IsGeneratingPrompt = false;
             StateHasChanged();
         }
     }
@@ -309,6 +303,7 @@
         LlmResponse = "";
         HasOriginal = false;
         HasPrompt = false;
+        IsGeneratingPrompt = false;
         ActiveTab = "prompt";
         
         if (codeEditor != null)
