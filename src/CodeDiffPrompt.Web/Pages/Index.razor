@@ -8,6 +8,7 @@
 @inject HistoryService HistoryService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject ToastService ToastService
 
 <PageTitle>Code Diff Analyzer</PageTitle>
 
@@ -20,14 +21,6 @@
     </header>
 
     <div class="editor-section">
-        @if (!string.IsNullOrEmpty(ErrorMessage))
-        {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <strong>Error:</strong> @ErrorMessage
-                <button type="button" class="btn-close" @onclick="@(() => ErrorMessage = "")"></button>
-            </div>
-        }
-        
         <div class="editor-controls">
             <div class="form-group">
                 <label for="fileName">File Name (optional):</label>
@@ -71,12 +64,6 @@
 
         <div class="editor-pane">
             <h3>Code Editor</h3>
-            @if (HasOriginal)
-            {
-                <div class="alert alert-info">
-                    Original version captured. Edit the code and click "Generate Prompt" to see changes.
-                </div>
-            }
             <CodeEditor @ref="codeEditor" EditorId="main-editor" Language="@Language" Value="@CurrentCode" />
         </div>
     </div>
@@ -137,7 +124,7 @@
             else if (ActiveTab == "response")
             {
                 <div class="tab-pane active">
-                    <LlmResponseView Response="@LlmResponse" IsLoading="@IsProcessing" ErrorMessage="@ErrorMessage" />
+                    <LlmResponseView Response="@LlmResponse" IsLoading="@IsProcessing" />
                 </div>
             }
         </div>
@@ -153,7 +140,6 @@
     private string GeneratedPrompt = "";
     private string GeneratedDiff = "";
     private string LlmResponse = "";
-    private string ErrorMessage = "";
     private bool IsProcessing = false;
     private bool HasOriginal = false;
     private bool HasPrompt = false;
@@ -177,8 +163,7 @@
         {
             if (codeEditor == null)
             {
-                ErrorMessage = "Editor is not initialized";
-                StateHasChanged();
+                ToastService.ShowError("Editor is not initialized");
                 return;
             }
 
@@ -186,21 +171,18 @@
             
             if (string.IsNullOrWhiteSpace(OriginalCode))
             {
-                ErrorMessage = "Cannot capture empty code";
-                StateHasChanged();
+                ToastService.ShowError("Cannot capture empty code");
                 return;
             }
 
             HasOriginal = true;
-            ErrorMessage = "";
+            ToastService.ShowSuccess("Original code captured successfully!");
             await JS.InvokeVoidAsync("console.log", "Original code captured, length:", OriginalCode.Length);
-            StateHasChanged();
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Failed to capture original: {ex.Message}";
+            ToastService.ShowError($"Failed to capture original: {ex.Message}");
             await JS.InvokeVoidAsync("console.error", "CaptureOriginal error:", ex.ToString());
-            StateHasChanged();
         }
     }
 
@@ -219,12 +201,11 @@
         try
         {
             IsProcessing = true;
-            ErrorMessage = "";
             StateHasChanged();
 
             if (codeEditor == null)
             {
-                ErrorMessage = "Editor is not initialized";
+                ToastService.ShowError("Editor is not initialized");
                 return;
             }
 
@@ -235,13 +216,13 @@
 
             if (string.IsNullOrWhiteSpace(CurrentCode))
             {
-                ErrorMessage = "Current code is empty";
+                ToastService.ShowError("Current code is empty");
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(OriginalCode))
             {
-                ErrorMessage = "Original code was not captured properly";
+                ToastService.ShowError("Original code was not captured properly");
                 return;
             }
 
@@ -253,7 +234,7 @@
             
             if (string.IsNullOrWhiteSpace(GeneratedDiff))
             {
-                ErrorMessage = "Failed to generate diff";
+                ToastService.ShowError("No changes detected");
                 return;
             }
 
@@ -264,14 +245,14 @@
 
             HasPrompt = true;
             ActiveTab = "prompt";
+            ToastService.ShowSuccess("Prompt generated successfully!");
             
             await JS.InvokeVoidAsync("console.log", "HasPrompt set to:", HasPrompt);
             await JS.InvokeVoidAsync("console.log", "ActiveTab set to:", ActiveTab);
-            await JS.InvokeVoidAsync("console.log", "Prompt generated successfully");
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Failed to generate prompt: {ex.Message}";
+            ToastService.ShowError($"Failed to generate prompt: {ex.Message}");
             await JS.InvokeVoidAsync("console.error", "GeneratePrompt error:", ex.ToString());
         }
         finally
@@ -288,7 +269,6 @@
         try
         {
             IsProcessing = true;
-            ErrorMessage = "";
             LlmResponse = "";
             ActiveTab = "response";
             StateHasChanged();
@@ -306,10 +286,12 @@
                 GeneratedDiff,
                 LlmResponse
             );
+            
+            ToastService.ShowSuccess("Analysis completed!");
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Failed to analyze: {ex.Message}";
+            ToastService.ShowError($"Failed to analyze: {ex.Message}");
         }
         finally
         {
@@ -325,7 +307,6 @@
         GeneratedPrompt = "";
         GeneratedDiff = "";
         LlmResponse = "";
-        ErrorMessage = "";
         HasOriginal = false;
         HasPrompt = false;
         ActiveTab = "prompt";
@@ -335,7 +316,7 @@
             await codeEditor.SetValue("");
         }
         
-        StateHasChanged();
+        ToastService.ShowSuccess("Reset completed");
     }
 }
 

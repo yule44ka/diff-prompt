@@ -20,6 +20,7 @@ builder.Services.AddHttpClient<ClaudeClient>()
 builder.Services.AddScoped<IDiffService, DiffService>();
 builder.Services.AddScoped<PromptBuilder>();
 builder.Services.AddScoped<HistoryService>();
+builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();

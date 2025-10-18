@@ -1,0 +1,139 @@
+@using CodeDiffPrompt.Web.Services
+@using Microsoft.JSInterop
+@inject ToastService ToastService
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Render into body-level portal *@
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="toast-container-global" style="position: fixed !important; top: 80px !important; right: 20px !important; z-index: 99999 !important;">
+        <div class="toast-notification toast-error @(IsToastVisible ? "show" : "")" 
+             style="background: linear-gradient(135deg, rgba(211, 47, 47, 0.5) 0%, rgba(183, 28, 28, 0.5) 100%) !important; 
+                    backdrop-filter: blur(12px) !important;
+                    -webkit-backdrop-filter: blur(12px) !important;
+                    color: white !important; 
+                    padding: 16px 24px !important; 
+                    border-radius: 12px !important; 
+                    box-shadow: 0 8px 24px rgba(211, 47, 47, 0.6) !important;
+                    border-left: 4px solid rgba(244, 67, 54, 0.9) !important;
+                    min-width: 320px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 12px !important;">
+            <div class="toast-icon" style="font-size: 24px !important; flex-shrink: 0 !important;">⚠️</div>
+            <div class="toast-content" style="flex: 1 !important;">
+                <strong style="display: block !important; font-size: 14px !important; margin-bottom: 4px !important;">Error</strong>
+                <p style="margin: 0 !important; font-size: 13px !important;">@ErrorMessage</p>
+            </div>
+            <button type="button" class="toast-close" @onclick="DismissToast" 
+                    style="background: transparent !important; 
+                           border: none !important; 
+                           color: white !important; 
+                           font-size: 20px !important; 
+                           cursor: pointer !important;
+                           padding: 0 !important;
+                           width: 20px !important;
+                           height: 20px !important;">&times;</button>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(SuccessMessage))
+{
+    <div class="toast-container-global" style="position: fixed !important; top: 80px !important; right: 20px !important; z-index: 99999 !important;">
+        <div class="toast-notification toast-success @(IsToastVisible ? "show" : "")" 
+             style="background: linear-gradient(135deg, rgba(56, 142, 60, 0.5) 0%, rgba(27, 94, 32, 0.5) 100%) !important; 
+                    backdrop-filter: blur(12px) !important;
+                    -webkit-backdrop-filter: blur(12px) !important;
+                    color: white !important; 
+                    padding: 16px 24px !important; 
+                    border-radius: 12px !important; 
+                    box-shadow: 0 8px 24px rgba(56, 142, 60, 0.6) !important;
+                    border-left: 4px solid rgba(76, 175, 80, 0.9) !important;
+                    min-width: 320px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 12px !important;">
+            <div class="toast-icon" style="font-size: 24px !important; flex-shrink: 0 !important;">✓</div>
+            <div class="toast-content" style="flex: 1 !important;">
+                <strong style="display: block !important; font-size: 14px !important; margin-bottom: 4px !important;">Success</strong>
+                <p style="margin: 0 !important; font-size: 13px !important;">@SuccessMessage</p>
+            </div>
+            <button type="button" class="toast-close" @onclick="DismissToast" 
+                    style="background: transparent !important; 
+                           border: none !important; 
+                           color: white !important; 
+                           font-size: 20px !important; 
+                           cursor: pointer !important;
+                           padding: 0 !important;
+                           width: 20px !important;
+                           height: 20px !important;">&times;</button>
+        </div>
+    </div>
+}
+
+@code {
+    private string ErrorMessage = "";
+    private string SuccessMessage = "";
+    private bool IsToastVisible = false;
+    private System.Threading.Timer? toastTimer;
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += ShowToast;
+    }
+
+    private void ShowToast(string message, bool isError)
+    {
+        if (isError)
+        {
+            ErrorMessage = message;
+            SuccessMessage = "";
+        }
+        else
+        {
+            SuccessMessage = message;
+            ErrorMessage = "";
+        }
+        
+        IsToastVisible = true;
+        StateHasChanged();
+        
+        // Auto-dismiss after 4 seconds
+        toastTimer?.Dispose();
+        toastTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                DismissToast();
+            });
+        }, null, 4000, System.Threading.Timeout.Infinite);
+    }
+
+    private void DismissToast()
+    {
+        IsToastVisible = false;
+        toastTimer?.Dispose();
+        
+        // Clear messages after animation completes
+        Task.Delay(300).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                ErrorMessage = "";
+                SuccessMessage = "";
+                StateHasChanged();
+            });
+        });
+        
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        toastTimer?.Dispose();
+        ToastService.OnShow -= ShowToast;
+    }
+}
+
